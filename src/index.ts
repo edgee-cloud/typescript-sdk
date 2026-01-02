@@ -68,15 +68,34 @@ export interface SendResponse {
   };
 }
 
+export interface EdgeeConfig {
+  apiKey?: string;
+  baseUrl?: string;
+}
+
 export default class Edgee {
   private apiKey: string;
-  private baseUrl = "https://api.edgee.ai";
+  private baseUrl: string;
 
-  constructor(apiKey?: string) {
+  constructor(config?: string | EdgeeConfig) {
+    let apiKey: string | undefined;
+    let baseUrl: string | undefined;
+
+    if (typeof config === "string") {
+      // Backward compatibility: accept apiKey as string
+      apiKey = config;
+    } else if (config) {
+      // New format: accept config object
+      apiKey = config.apiKey;
+      baseUrl = config.baseUrl;
+    }
+
     this.apiKey = apiKey || process.env.EDGEE_API_KEY || "";
     if (!this.apiKey) {
       throw new Error("EDGEE_API_KEY is not set");
     }
+
+    this.baseUrl = baseUrl || process.env.EDGEE_BASE_URL || "https://api.edgee.ai";
   }
 
   async send(options: SendOptions): Promise<SendResponse> {

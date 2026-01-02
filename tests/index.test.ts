@@ -8,28 +8,75 @@ describe('Edgee', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = mockFetch;
-    // Clear environment variable
+    // Clear environment variables
     delete process.env.EDGEE_API_KEY;
+    delete process.env.EDGEE_BASE_URL;
   });
 
   describe('constructor', () => {
-    it('should use provided API key', () => {
-      const client = new Edgee(mockApiKey);
-      expect(client).toBeInstanceOf(Edgee);
+    describe('with string API key (backward compatibility)', () => {
+      it('should use provided API key', () => {
+        const client = new Edgee(mockApiKey);
+        expect(client).toBeInstanceOf(Edgee);
+      });
+
+      it('should throw error when empty string is provided as API key', () => {
+        expect(() => new Edgee('')).toThrow('EDGEE_API_KEY is not set');
+      });
     });
 
-    it('should use EDGEE_API_KEY environment variable when no API key provided', () => {
-      process.env.EDGEE_API_KEY = 'env-api-key';
-      const client = new Edgee();
-      expect(client).toBeInstanceOf(Edgee);
+    describe('with config object', () => {
+      it('should use provided API key and baseUrl', () => {
+        const customBaseUrl = 'https://custom-api.example.com';
+        const client = new Edgee({ apiKey: mockApiKey, baseUrl: customBaseUrl });
+        expect(client).toBeInstanceOf(Edgee);
+      });
+
+      it('should use provided API key with default baseUrl when baseUrl not provided', () => {
+        const client = new Edgee({ apiKey: mockApiKey });
+        expect(client).toBeInstanceOf(Edgee);
+      });
+
+      it('should use EDGEE_API_KEY environment variable when apiKey not provided in config', () => {
+        process.env.EDGEE_API_KEY = 'env-api-key';
+        const customBaseUrl = 'https://custom-api.example.com';
+        const client = new Edgee({ baseUrl: customBaseUrl });
+        expect(client).toBeInstanceOf(Edgee);
+      });
+
+      it('should use EDGEE_BASE_URL environment variable when baseUrl not provided in config', () => {
+        process.env.EDGEE_API_KEY = 'env-api-key';
+        process.env.EDGEE_BASE_URL = 'https://env-base-url.example.com';
+        const client = new Edgee({ apiKey: mockApiKey });
+        expect(client).toBeInstanceOf(Edgee);
+      });
+
+      it('should use both environment variables when config object is empty', () => {
+        process.env.EDGEE_API_KEY = 'env-api-key';
+        process.env.EDGEE_BASE_URL = 'https://env-base-url.example.com';
+        const client = new Edgee({});
+        expect(client).toBeInstanceOf(Edgee);
+      });
+
+      it('should throw error when no API key is provided in config and EDGEE_API_KEY is not set', () => {
+        expect(() => new Edgee({})).toThrow('EDGEE_API_KEY is not set');
+      });
+
+      it('should throw error when empty string is provided as apiKey in config', () => {
+        expect(() => new Edgee({ apiKey: '' })).toThrow('EDGEE_API_KEY is not set');
+      });
     });
 
-    it('should throw error when no API key is provided and EDGEE_API_KEY is not set', () => {
-      expect(() => new Edgee()).toThrow('EDGEE_API_KEY is not set');
-    });
+    describe('without arguments', () => {
+      it('should use EDGEE_API_KEY environment variable when no API key provided', () => {
+        process.env.EDGEE_API_KEY = 'env-api-key';
+        const client = new Edgee();
+        expect(client).toBeInstanceOf(Edgee);
+      });
 
-    it('should throw error when empty string is provided as API key', () => {
-      expect(() => new Edgee('')).toThrow('EDGEE_API_KEY is not set');
+      it('should throw error when no API key is provided and EDGEE_API_KEY is not set', () => {
+        expect(() => new Edgee()).toThrow('EDGEE_API_KEY is not set');
+      });
     });
   });
 
@@ -309,6 +356,139 @@ describe('Edgee', () => {
       expect(result.choices).toHaveLength(2);
       expect(result.choices[0].message.content).toBe('First response');
       expect(result.choices[1].message.content).toBe('Second response');
+    });
+
+    it('should use custom baseUrl when provided in constructor', async () => {
+      const customBaseUrl = 'https://custom-api.example.com';
+      const customClient = new Edgee({ apiKey: mockApiKey, baseUrl: customBaseUrl });
+
+      const mockResponse: SendResponse = {
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'Response',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      await customClient.send({
+        model: 'gpt-4',
+        input: 'Test',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${customBaseUrl}/v1/chat/completions`,
+        expect.any(Object)
+      );
+    });
+
+    it('should use EDGEE_BASE_URL environment variable when baseUrl not provided', async () => {
+      const envBaseUrl = 'https://env-base-url.example.com';
+      process.env.EDGEE_BASE_URL = envBaseUrl;
+      const envClient = new Edgee(mockApiKey);
+
+      const mockResponse: SendResponse = {
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'Response',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      await envClient.send({
+        model: 'gpt-4',
+        input: 'Test',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${envBaseUrl}/v1/chat/completions`,
+        expect.any(Object)
+      );
+    });
+
+    it('should use default baseUrl when neither custom baseUrl nor EDGEE_BASE_URL is provided', async () => {
+      const defaultClient = new Edgee(mockApiKey);
+
+      const mockResponse: SendResponse = {
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'Response',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      await defaultClient.send({
+        model: 'gpt-4',
+        input: 'Test',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.edgee.ai/v1/chat/completions',
+        expect.any(Object)
+      );
+    });
+
+    it('should prioritize config baseUrl over EDGEE_BASE_URL environment variable', async () => {
+      const configBaseUrl = 'https://config-base-url.example.com';
+      process.env.EDGEE_BASE_URL = 'https://env-base-url.example.com';
+      const configClient = new Edgee({ apiKey: mockApiKey, baseUrl: configBaseUrl });
+
+      const mockResponse: SendResponse = {
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'Response',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      await configClient.send({
+        model: 'gpt-4',
+        input: 'Test',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${configBaseUrl}/v1/chat/completions`,
+        expect.any(Object)
+      );
     });
   });
 });
