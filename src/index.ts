@@ -70,10 +70,13 @@ export interface SendResponse {
 
 export default class Edgee {
   private apiKey: string;
-  private baseUrl = "https://api.edgee.team";
+  private baseUrl = "https://api.edgee.ai";
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
+  constructor(apiKey?: string) {
+    this.apiKey = apiKey || process.env.EDGEE_API_KEY || "";
+    if (!this.apiKey) {
+      throw new Error("EDGEE_API_KEY is not set");
+    }
   }
 
   async send(options: SendOptions): Promise<SendResponse> {
@@ -101,7 +104,7 @@ export default class Edgee {
       body: JSON.stringify(body),
     });
 
-    const data = await res.json();
+    const data = (await res.json()) as SendResponse;
 
     return {
       choices: data.choices,

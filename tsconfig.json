@@ -7,8 +7,10 @@
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "lib": ["ES2020"],
+    "types": ["node"]
   },
-  "include": ["index.ts"]
+  "include": ["src/index.ts"]
 }
 
