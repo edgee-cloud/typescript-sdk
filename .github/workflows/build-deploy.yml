@@ -1,0 +1,32 @@
+name: Publish edgee to npmjs
+on:
+  release:
+    types:
+      - released
+
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Compile the Library
+        run: npm run build
+
+      - name: Publish edgee on npm
+        run: npm publish
