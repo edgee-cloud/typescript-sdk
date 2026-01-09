@@ -292,15 +292,4 @@ export default class Edgee {
       body
     );
   }
-
-  async *streamText(
-    model: string,
-    input: string | InputObject
-  ): AsyncGenerator<string> {
-    for await (const chunk of this.stream(model, input)) {
-      if (chunk.text) {
-        yield chunk.text;
-      }
-    }
-  }
 }
