@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import Edgee, { type SendOptions, type SendResponse } from '../src/index.js';
+import Edgee, { type SendOptions, type SendResponse, StreamChunk } from '../src/index.js';
 
 describe('Edgee', () => {
   const mockApiKey = 'test-api-key-12345';
@@ -489,6 +489,546 @@ describe('Edgee', () => {
         `${configBaseUrl}/v1/chat/completions`,
         expect.any(Object)
       );
+    });
+
+    it('should throw error when API returns non-OK status', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => 'Unauthorized',
+      });
+
+      await expect(
+        client.send({
+          model: 'gpt-4',
+          input: 'Test',
+        })
+      ).rejects.toThrow('API error 401: Unauthorized');
+    });
+
+    it('should throw error on 500 status', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => 'Internal Server Error',
+      });
+
+      await expect(
+        client.send({
+          model: 'gpt-4',
+          input: 'Test',
+        })
+      ).rejects.toThrow('API error 500: Internal Server Error');
+    });
+  });
+
+  describe('convenience properties', () => {
+    let client: Edgee;
+
+    beforeEach(() => {
+      client = new Edgee(mockApiKey);
+    });
+
+    it('should provide .text property for SendResponse', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'Hello, world!',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await client.send({
+        model: 'gpt-4',
+        input: 'Hello',
+      });
+
+      expect(result.text).toBe('Hello, world!');
+    });
+
+    it('should provide .message property for SendResponse', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'Hello, world!',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await client.send({
+        model: 'gpt-4',
+        input: 'Hello',
+      });
+
+      expect(result.message).toEqual({
+        role: 'assistant',
+        content: 'Hello, world!',
+      });
+    });
+
+    it('should provide .finishReason property for SendResponse', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'Hello',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await client.send({
+        model: 'gpt-4',
+        input: 'Hello',
+      });
+
+      expect(result.finishReason).toBe('stop');
+    });
+
+    it('should provide .toolCalls property for SendResponse', async () => {
+      const toolCalls = [
+        {
+          id: 'call_123',
+          type: 'function' as const,
+          function: {
+            name: 'get_weather',
+            arguments: '{"location": "San Francisco"}',
+          },
+        },
+      ];
+
+      const mockResponse = {
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: toolCalls,
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await client.send({
+        model: 'gpt-4',
+        input: 'What is the weather?',
+      });
+
+      expect(result.toolCalls).toEqual(toolCalls);
+    });
+
+    it('should return null for convenience properties when choices are empty', async () => {
+      const mockResponse = {
+        choices: [],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await client.send({
+        model: 'gpt-4',
+        input: 'Hello',
+      });
+
+      expect(result.text).toBeNull();
+      expect(result.message).toBeNull();
+      expect(result.finishReason).toBeNull();
+      expect(result.toolCalls).toBeNull();
+    });
+  });
+
+  describe('stream', () => {
+    let client: Edgee;
+
+    beforeEach(() => {
+      client = new Edgee(mockApiKey);
+    });
+
+    it('should stream chunks with string input', async () => {
+      const mockChunks = [
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { role: 'assistant', content: '' },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { content: 'Hello' },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { content: ' world' },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {},
+              finish_reason: 'stop',
+            },
+          ],
+        },
+      ];
+
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const chunk of mockChunks) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`)
+            );
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        body: stream,
+      });
+
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of client.stream('gpt-4', 'Hello')) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toHaveLength(4);
+      expect(chunks[0].role).toBe('assistant');
+      expect(chunks[1].text).toBe('Hello');
+      expect(chunks[2].text).toBe(' world');
+      expect(chunks[3].finishReason).toBe('stop');
+    });
+
+    it('should stream chunks with InputObject', async () => {
+      const mockChunks = [
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { role: 'assistant', content: 'Response' },
+              finish_reason: null,
+            },
+          ],
+        },
+      ];
+
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const chunk of mockChunks) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`)
+            );
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        body: stream,
+      });
+
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of client.stream('gpt-4', {
+        messages: [{ role: 'user', content: 'Hello' }],
+      })) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].text).toBe('Response');
+    });
+
+    it('should handle streaming errors', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        text: async () => 'Rate limit exceeded',
+      });
+
+      const stream = client.stream('gpt-4', 'Hello');
+
+      await expect(stream.next()).rejects.toThrow(
+        'API error 429: Rate limit exceeded'
+      );
+    });
+
+    it('should skip malformed JSON in stream', async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {invalid json}\n\n'));
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                choices: [{ index: 0, delta: { content: 'Valid' }, finish_reason: null }],
+              })}\n\n`
+            )
+          );
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        body: stream,
+      });
+
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of client.stream('gpt-4', 'Hello')) {
+        chunks.push(chunk);
+      }
+
+      // Should skip the malformed JSON and only return the valid chunk
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].text).toBe('Valid');
+    });
+  });
+
+  describe('streamText', () => {
+    let client: Edgee;
+
+    beforeEach(() => {
+      client = new Edgee(mockApiKey);
+    });
+
+    it('should stream only text content', async () => {
+      const mockChunks = [
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { role: 'assistant', content: '' },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { content: 'Hello' },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { content: ' world' },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {},
+              finish_reason: 'stop',
+            },
+          ],
+        },
+      ];
+
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const chunk of mockChunks) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`)
+            );
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        body: stream,
+      });
+
+      const texts: string[] = [];
+      for await (const text of client.streamText('gpt-4', 'Hello')) {
+        texts.push(text);
+      }
+
+      // Should only include chunks with content, skipping empty content and finish chunk
+      expect(texts).toEqual(['Hello', ' world']);
+    });
+
+    it('should filter out chunks without text content', async () => {
+      const mockChunks = [
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { role: 'assistant' },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { content: 'Text' },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {},
+              finish_reason: 'stop',
+            },
+          ],
+        },
+      ];
+
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const chunk of mockChunks) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`)
+            );
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        body: stream,
+      });
+
+      const texts: string[] = [];
+      for await (const text of client.streamText('gpt-4', 'Hello')) {
+        texts.push(text);
+      }
+
+      expect(texts).toEqual(['Text']);
+    });
+  });
+
+  describe('StreamChunk convenience properties', () => {
+    it('should provide .text property', () => {
+      const chunk = new StreamChunk([
+        {
+          index: 0,
+          delta: { content: 'Hello' },
+          finish_reason: null,
+        },
+      ]);
+
+      expect(chunk.text).toBe('Hello');
+    });
+
+    it('should provide .role property', () => {
+      const chunk = new StreamChunk([
+        {
+          index: 0,
+          delta: { role: 'assistant' },
+          finish_reason: null,
+        },
+      ]);
+
+      expect(chunk.role).toBe('assistant');
+    });
+
+    it('should provide .finishReason property', () => {
+      const chunk = new StreamChunk([
+        {
+          index: 0,
+          delta: {},
+          finish_reason: 'stop',
+        },
+      ]);
+
+      expect(chunk.finishReason).toBe('stop');
+    });
+
+    it('should return null for properties when not present', () => {
+      const chunk = new StreamChunk([
+        {
+          index: 0,
+          delta: {},
+          finish_reason: null,
+        },
+      ]);
+
+      expect(chunk.text).toBeNull();
+      expect(chunk.role).toBeNull();
+      expect(chunk.finishReason).toBeNull();
+    });
+
+    it('should return null for properties when choices are empty', () => {
+      const chunk = new StreamChunk([]);
+
+      expect(chunk.text).toBeNull();
+      expect(chunk.role).toBeNull();
+      expect(chunk.finishReason).toBeNull();
     });
   });
 });
