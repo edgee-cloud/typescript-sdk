@@ -101,7 +101,8 @@ export interface InputObject {
 export interface SimpleSendOptions {
   model: string;
   input: string;
-  tools?: Tool[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tools?: Tool<any>[];
   maxToolIterations?: number;
 }
 
