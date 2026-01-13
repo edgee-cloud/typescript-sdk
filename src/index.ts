@@ -125,22 +125,27 @@ export interface Choice {
   finish_reason: string | null;
 }
 
+export interface InputTokenDetails {
+  cached_tokens: number;
+}
+
+export interface OutputTokenDetails {
+  reasoning_tokens: number;
+}
+
+export interface Usage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  input_tokens_details: InputTokenDetails;
+  output_tokens_details: OutputTokenDetails;
+}
+
 export class SendResponse {
   choices: Choice[];
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+  usage?: Usage;
 
-  constructor(
-    choices: Choice[],
-    usage?: {
-      prompt_tokens: number;
-      completion_tokens: number;
-      total_tokens: number;
-    }
-  ) {
+  constructor(choices: Choice[], usage?: Usage) {
     this.choices = choices;
     this.usage = usage;
   }
@@ -278,11 +283,13 @@ export default class Edgee {
       // Accumulate usage
       if (response.usage) {
         if (!totalUsage) {
-          totalUsage = { ...response.usage };
+          totalUsage = structuredClone(response.usage);
         } else {
           totalUsage.prompt_tokens += response.usage.prompt_tokens;
           totalUsage.completion_tokens += response.usage.completion_tokens;
           totalUsage.total_tokens += response.usage.total_tokens;
+          totalUsage.input_tokens_details.cached_tokens += response.usage.input_tokens_details.cached_tokens;
+          totalUsage.output_tokens_details.reasoning_tokens += response.usage.output_tokens_details.reasoning_tokens;
         }
       }
 
@@ -367,13 +374,9 @@ export default class Edgee {
       throw new Error(`API error ${res.status}: ${errorBody}`);
     }
 
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       choices: Choice[];
-      usage?: {
-        prompt_tokens: number;
-        completion_tokens: number;
-        total_tokens: number;
-      }
+      usage?: Usage;
     };
 
     return new SendResponse(data.choices, data.usage);
@@ -483,11 +486,7 @@ export default class Edgee {
 
     const data = (await res.json()) as {
       choices: Choice[];
-      usage?: {
-        prompt_tokens: number;
-        completion_tokens: number;
-        total_tokens: number;
-      };
+      usage?: Usage;
     };
 
     return new SendResponse(data.choices, data.usage);
