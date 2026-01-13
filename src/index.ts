@@ -286,15 +286,12 @@ export default class Edgee {
         }
       }
 
-      // No tool calls? We're done - return final response
+      // No choice or no tool calls? We're done - return final response
       if (
-        !choice.message.tool_calls ||
+        !choice?.message?.tool_calls ||
         choice.message.tool_calls.length === 0
       ) {
-        return {
-          choices: response.choices,
-          usage: totalUsage,
-        };
+        return new SendResponse(response.choices, totalUsage);
       }
 
       // Add assistant's response (with tool_calls) to messages
@@ -479,7 +476,21 @@ export default class Edgee {
       body: JSON.stringify(body),
     });
 
-    return (await res.json()) as SendResponse;
+    if (!res.ok) {
+      const errorBody = await res.text();
+      throw new Error(`API error ${res.status}: ${errorBody}`);
+    }
+
+    const data = (await res.json()) as {
+      choices: Choice[];
+      usage?: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+      };
+    };
+
+    return new SendResponse(data.choices, data.usage);
   }
 }
 

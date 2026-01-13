@@ -644,9 +644,12 @@ describe('Edgee', () => {
         json: async () => mockResponse,
       });
 
+      // Use InputObject to trigger sendAdvanced mode (no auto tool execution)
       const result = await client.send({
         model: 'gpt-4',
-        input: 'What is the weather?',
+        input: {
+          messages: [{ role: 'user', content: 'What is the weather?' }],
+        },
       });
 
       expect(result.toolCalls).toEqual(toolCalls);
@@ -662,9 +665,12 @@ describe('Edgee', () => {
         json: async () => mockResponse,
       });
 
+      // Use InputObject to trigger sendAdvanced mode
       const result = await client.send({
         model: 'gpt-4',
-        input: 'Hello',
+        input: {
+          messages: [{ role: 'user', content: 'Hello' }],
+        },
       });
 
       expect(result.text).toBeNull();
