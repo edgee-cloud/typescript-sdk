@@ -1,6 +1,9 @@
-# Edgee Gateway SDK
+# Edgee TypeScript SDK
 
-Lightweight TypeScript SDK for Edgee AI Gateway.
+Lightweight, type-safe TypeScript SDK for the [Edgee AI Gateway](https://www.edgee.cloud).
+
+[![npm version](https://img.shields.io/npm/v/edgee.svg)](https://www.npmjs.com/package/edgee)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 ## Installation
 
@@ -8,88 +11,76 @@ Lightweight TypeScript SDK for Edgee AI Gateway.
 npm install edgee
 ```
 
-## Usage
+## Quick Start
 
 ```typescript
-import Edgee from "edgee";
+import Edgee from 'edgee';
 
-const edgee = new Edgee(process.env.EDGEE_API_KEY);
+const edgee = new Edgee("your-api-key");
+
+// Send a simple request
+const response = await edgee.send({
+  model: 'gpt-4o',
+  input: 'What is the capital of France?',
+});
+
+console.log(response.text);
+// "The capital of France is Paris."
 ```
 
-### Simple Input
+## Send Method
+
+The `send()` method makes non-streaming chat completion requests:
 
 ```typescript
 const response = await edgee.send({
-  model: "gpt-4o",
-  input: "What is the capital of France?",
+  model: 'gpt-4o',
+  input: 'Hello, world!',
 });
 
-console.log(response.choices[0].message.content);
+// Access response
+console.log(response.text);           // Text content
+console.log(response.finishReason);   // Finish reason
+console.log(response.toolCalls);      // Tool calls (if any)
 ```
 
-### Full Input with Messages
+## Stream Method
+
+The `stream()` method enables real-time streaming responses:
 
 ```typescript
-const response = await edgee.send({
-  model: "gpt-4o",
-  input: {
-    messages: [
-      { role: "system", content: "You are a helpful assistant." },
-      { role: "user", content: "Hello!" },
-    ],
-  },
-});
-```
-
-### With Tools
-
-```typescript
-const response = await edgee.send({
-  model: "gpt-4o",
-  input: {
-    messages: [{ role: "user", content: "What's the weather in Paris?" }],
-    tools: [
-      {
-        type: "function",
-        function: {
-          name: "get_weather",
-          description: "Get weather for a location",
-          parameters: {
-            type: "object",
-            properties: {
-              location: { type: "string" },
-            },
-          },
-        },
-      },
-    ],
-    tool_choice: "auto",
-  },
-});
-
-if (response.choices[0].message.tool_calls) {
-  console.log(response.choices[0].message.tool_calls);
+for await (const chunk of edgee.stream('gpt-4o', 'Tell me a story')) {
+  if (chunk.text) {
+    process.stdout.write(chunk.text);
+  }
+  
+  if (chunk.finishReason) {
+    console.log(`\nFinished: ${chunk.finishReason}`);
+  }
 }
 ```
 
-## Response
+## Features
 
-```typescript
-interface SendResponse {
-  choices: {
-    index: number;
-    message: {
-      role: string;
-      content: string | null;
-      tool_calls?: ToolCall[];
-    };
-    finish_reason: string | null;
-  }[];
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
-```
+- ✅ **Type-safe** - Full TypeScript support with comprehensive types
+- ✅ **OpenAI-compatible** - Works with any model supported by Edgee
+- ✅ **Streaming** - Real-time response streaming
+- ✅ **Tool calling** - Full support for function calling
+- ✅ **Flexible input** - Accept strings or structured objects
+- ✅ **Zero dependencies** - Lightweight and fast
 
+## Documentation
+
+For complete documentation, examples, and API reference, visit:
+
+**👉 [Official TypeScript SDK Documentation](https://www.edgee.cloud/docs/sdk/typescript)**
+
+The documentation includes:
+- [Configuration guide](https://www.edgee.cloud/docs/sdk/typescript/configuration) - Multiple ways to configure the SDK
+- [Send method](https://www.edgee.cloud/docs/sdk/typescript/send) - Complete guide to non-streaming requests
+- [Stream method](https://www.edgee.cloud/docs/sdk/typescript/stream) - Streaming responses guide
+- [Tools](https://www.edgee.cloud/docs/sdk/typescript/tools) - Function calling guide
+
+## License
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
