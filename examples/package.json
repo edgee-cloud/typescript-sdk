@@ -1,0 +1,22 @@
+{
+  "name": "edgee-sdk-examples",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "simple": "npx tsx simple.ts",
+    "messages": "npx tsx messages.ts",
+    "tools:manual": "npx tsx tools_manual.ts",
+    "tools:auto": "npx tsx tools_auto.ts",
+    "tools:multiple": "npx tsx tools_multiple.ts",
+    "stream": "npx tsx stream.ts",
+    "stream:tools": "npx tsx stream_tools.ts",
+    "all": "npm run simple && npm run messages && npm run tools:manual && npm run tools:auto && npm run tools:multiple && npm run stream && npm run stream:tools"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "edgee": "file:.."
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0"
+  }
+}
