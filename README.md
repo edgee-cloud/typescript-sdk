@@ -1,6 +1,9 @@
-# Edgee Gateway SDK
+# Edgee TypeScript SDK
 
-Lightweight TypeScript SDK for Edgee AI Gateway with built-in tool execution support.
+Lightweight, type-safe TypeScript SDK for the [Edgee AI Gateway](https://www.edgee.cloud).
+
+[![npm version](https://img.shields.io/npm/v/edgee.svg)](https://www.npmjs.com/package/edgee)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 ## Installation
 
@@ -8,210 +11,76 @@ Lightweight TypeScript SDK for Edgee AI Gateway with built-in tool execution sup
 npm install edgee
 ```
 
-## Usage
+## Quick Start
 
 ```typescript
-import Edgee from "edgee";
+import Edgee from 'edgee';
 
-const edgee = new Edgee(process.env.EDGEE_API_KEY);
+const edgee = new Edgee("your-api-key");
+
+// Send a simple request
+const response = await edgee.send({
+  model: 'gpt-4o',
+  input: 'What is the capital of France?',
+});
+
+console.log(response.text);
+// "The capital of France is Paris."
 ```
 
-### Simple Input
+## Send Method
+
+The `send()` method makes non-streaming chat completion requests:
 
 ```typescript
 const response = await edgee.send({
-  model: "gpt-4o",
-  input: "What is the capital of France?",
+  model: 'gpt-4o',
+  input: 'Hello, world!',
 });
 
-console.log(response.choices[0].message.content);
+// Access response
+console.log(response.text);           // Text content
+console.log(response.finishReason);   // Finish reason
+console.log(response.toolCalls);      // Tool calls (if any)
 ```
 
-### Full Input with Messages
+## Stream Method
+
+The `stream()` method enables real-time streaming responses:
 
 ```typescript
-const response = await edgee.send({
-  model: "gpt-4o",
-  input: {
-    messages: [
-      { role: "system", content: "You are a helpful assistant." },
-      { role: "user", content: "Hello!" },
-    ],
-  },
-});
-```
+for await (const chunk of edgee.stream('gpt-4o', 'Tell me a story')) {
+  if (chunk.text) {
+    process.stdout.write(chunk.text);
+  }
 
-## Tools
-
-The SDK supports two modes for working with tools:
-
-### Simple Mode: Automatic Tool Execution
-
-Use the `Tool` class with Zod schemas for automatic tool execution. The SDK will handle the entire agentic loop for you:
-
-```typescript
-import Edgee, { Tool, z } from "edgee";
-
-const edgee = new Edgee(process.env.EDGEE_API_KEY);
-
-// Define a tool with Zod schema and handler
-const weatherTool = new Tool({
-  name: "get_weather",
-  description: "Get the current weather for a location",
-  schema: z.object({
-    location: z.string().describe("The city name"),
-  }),
-  handler: async (args) => {
-    // Your implementation here
-    return { temperature: 22, condition: "sunny", location: args.location };
-  },
-});
-
-// The SDK automatically:
-// 1. Sends the request with tools
-// 2. Executes tools when the model requests them
-// 3. Sends results back to the model
-// 4. Returns the final response
-const response = await edgee.send({
-  model: "gpt-4o",
-  input: "What's the weather in Paris?",
-  tools: [weatherTool],
-});
-
-console.log(response.choices[0].message.content);
-// "The weather in Paris is sunny with a temperature of 22°C."
-```
-
-#### Multiple Tools
-
-```typescript
-const calculatorTool = new Tool({
-  name: "calculate",
-  description: "Perform arithmetic operations",
-  schema: z.object({
-    operation: z.enum(["add", "subtract", "multiply", "divide"]),
-    a: z.number(),
-    b: z.number(),
-  }),
-  handler: async ({ operation, a, b }) => {
-    const ops = {
-      add: a + b,
-      subtract: a - b,
-      multiply: a * b,
-      divide: b !== 0 ? a / b : "Error: division by zero",
-    };
-    return { result: ops[operation] };
-  },
-});
-
-const response = await edgee.send({
-  model: "gpt-4o",
-  input: "What's 25 * 4, and what's the weather in London?",
-  tools: [weatherTool, calculatorTool],
-});
-```
-
-#### Configuration Options
-
-```typescript
-const response = await edgee.send({
-  model: "gpt-4o",
-  input: "Complex query requiring multiple tool calls",
-  tools: [tool1, tool2],
-  maxToolIterations: 15, // Default: 10
-});
-```
-
-### Advanced Mode: Manual Tool Handling
-
-For full control over tool execution, use the advanced mode with raw tool definitions:
-
-```typescript
-const response = await edgee.send({
-  model: "gpt-4o",
-  input: {
-    messages: [{ role: "user", content: "What's the weather in Paris?" }],
-    tools: [
-      {
-        type: "function",
-        function: {
-          name: "get_weather",
-          description: "Get weather for a location",
-          parameters: {
-            type: "object",
-            properties: {
-              location: { type: "string" },
-            },
-          },
-        },
-      },
-    ],
-    tool_choice: "auto",
-  },
-});
-
-// Handle tool calls manually
-if (response.choices[0].message.tool_calls) {
-  console.log(response.choices[0].message.tool_calls);
-  // Execute tools and send results back...
+  if (chunk.finishReason) {
+    console.log(`\nFinished: ${chunk.finishReason}`);
+  }
 }
 ```
 
-## Response
+## Features
 
-```typescript
-interface SendResponse {
-  choices: {
-    index: number;
-    message: {
-      role: string;
-      content: string | null;
-      tool_calls?: ToolCall[];
-    };
-    finish_reason: string | null;
-  }[];
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-    input_tokens_details: {
-      cached_tokens: number;
-    };
-    output_tokens_details: {
-      reasoning_tokens: number;
-    };
-  };
-}
-```
+- ✅ **Type-safe** - Full TypeScript support with comprehensive types
+- ✅ **OpenAI-compatible** - Works with any model supported by Edgee
+- ✅ **Streaming** - Real-time response streaming
+- ✅ **Tool calling** - Full support for function calling
+- ✅ **Flexible input** - Accept strings or structured objects
+- ✅ **Zero dependencies** - Lightweight and fast
 
-## API Reference
+## Documentation
 
-### `Tool` Class
+For complete documentation, examples, and API reference, visit:
 
-```typescript
-import { Tool, z } from "edgee";
+**👉 [Official TypeScript SDK Documentation](https://www.edgee.cloud/docs/sdk/typescript)**
 
-const tool = new Tool({
-  name: string;           // Unique tool name
-  description?: string;   // Tool description for the model
-  schema: z.ZodType;      // Zod schema for parameters
-  handler: (args) => any; // Function to execute (sync or async)
-});
+The documentation includes:
+- [Configuration guide](https://www.edgee.cloud/docs/sdk/typescript/configuration) - Multiple ways to configure the SDK
+- [Send method](https://www.edgee.cloud/docs/sdk/typescript/send) - Complete guide to non-streaming requests
+- [Stream method](https://www.edgee.cloud/docs/sdk/typescript/stream) - Streaming responses guide
+- [Tools](https://www.edgee.cloud/docs/sdk/typescript/tools) - Function calling guide
 
-// Methods
-tool.toJSON();           // Convert to OpenAI tool format
-tool.execute(args);      // Validate and execute handler
-```
+## License
 
-### `createTool` Helper
-
-```typescript
-import { createTool, z } from "edgee";
-
-const tool = createTool({
-  name: "my_tool",
-  schema: z.object({ ... }),
-  handler: (args) => { ... },
-});
-```
-
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
