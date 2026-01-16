@@ -53,7 +53,7 @@ for await (const chunk of edgee.stream('gpt-4o', 'Tell me a story')) {
   if (chunk.text) {
     process.stdout.write(chunk.text);
   }
-
+  
   if (chunk.finishReason) {
     console.log(`\nFinished: ${chunk.finishReason}`);
   }
